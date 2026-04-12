@@ -1,23 +1,18 @@
-# 🛡️ Enterprise-Grade SOC Monitoring Lab (Wazuh SIEM)
+# 🛡️ Enterprise-grade security monitoring environment built from the ground up.
 
-## 🏗️ Project Overview
-This repository documents the deployment of a scalable **Security Operations Center (SOC)** lab environment based on the **Wazuh EDR/XDR ecosystem**. The infrastructure is designed to provide full-stack visibility into system events, file integrity, and security posture across a hybrid network environment.
+# SOC Home Lab: Distributed Architecture & Monitoring
+This repository contains the technical documentation, network schemas, and configuration files for my distributed security operations lab.
 
-### 🌐 Infrastructure Architecture
-* **Manager Node:** Wazuh Server (Ubuntu 22.04 LTS) | Hosted on VirtualBox (Bridged Adapter)
-* **Endpoints (Agents):** * **Windows 11 Enterprise (Host):** Real-time monitoring of host-level telemetry and process execution.
-  * **Linux (VM):** (*Deployment Pending*) Web Server/Database monitoring.
-* **Network Context:** Utilizing a Bridged Networking topology to allow for real-world lateral movement detection and network-level telemetry.
+## 🏗️ Lab Architecture
+The environment is built across two physical hosts using VirtualBox and a physical ethernet bridge to simulate a corporate network.
+- **Perimeter Security:** pfSense (Firewall/Router/DHCP)
+- **SIEM/XDR:** Wazuh 4.x (Manager & Indexer)
+- **Endpoints:** Windows Server 2019 (DC) & Windows 10 LTSC (client).
 
----
-
-## 🛠️ Security Capabilities Implemented
-The lab is currently configured to perform the following "Enterprise-Level" functions:
-
-* **Log Data Analysis:** Centralized collection and analysis of Windows Event Logs (Sysmon) and Linux Syslog.
-* **Security Configuration Assessment (SCA):** Monitoring for misconfigurations against CIS Benchmarks.
-* **Active Response:** (Configuring) Automated intervention based on specific alert triggers.
-* **Threat Intel Integration:** Mapping alerts directly to the **MITRE ATT&CK®** framework.
+## ⚙️ Core Configurations
+- **Segmentation:** Isolated segments (Attack, Management, Production) using pfSense VLANs/Rules.
+- **Telemetry:** Advanced logging via Sysmon and Windows Event Forwarding.
+- **Hardening:** Implementation of CIS Benchmarks for Windows Server 2019.
 
 ---
 
@@ -29,20 +24,15 @@ I am currently simulating enterprise-level threats to validate detection logic:
 
 ---
 
-## 📂 Project Roadmap
-- [x] Deployment of Wazuh Manager & Indexer.
-- [x] Enrollment of Windows Agent with custom telemetry.
-- [ ] Enrollment of Linux Agent for Web Log (Apache/Nginx) monitoring.
-- [ ] Integration of **Sysmon** for deep-visibility into Windows kernel events.
-- [ ] Simulation of a **Brute-Force Attack** & automated remediation.
-- [ ] Implementation of Vulnerability Scanning & Patch Management reporting.
+## 📂 Documentation
+- `/network`: Diagrams and IP addressing schema.
+- `/configs`: Exported firewall rules and Wazuh agent configurations.
 
 ---
 
 ## 📊 Dashboard Preview
 
-<img width="1883" height="435" alt="image" src="https://github.com/user-attachments/assets/e3ac0a4c-35fc-49e4-abdd-f5f64210c857" />
-
+<img width="1910" height="895" alt="image" src="https://github.com/user-attachments/assets/03d75751-9140-467e-80f9-b636e645df13" />
 
 ---
 
