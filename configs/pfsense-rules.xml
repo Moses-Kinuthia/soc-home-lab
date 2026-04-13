@@ -1,0 +1,71 @@
+<filter>
+  <rule>
+    <type>pass</type>
+    <interface>openvpn</interface>
+    <ipprotocol>inet</ipprotocol>
+    <source>
+      <address>192.168.57.0/24</address>
+    </source>
+    <destination>
+      <address>192.168.56.0/24</address>
+    </destination>
+    <descr><![CDATA[ Allow Machine B LAN to Machine A LAN ]]></descr>
+    <statetype><![CDATA[ keep state ]]></statetype>
+  </rule>
+
+  <rule>
+    <type>pass</type>
+    <interface>lan</interface>
+    <ipprotocol>inet</ipprotocol>
+    <source>
+      <network>lan</network>
+    </source>
+    <destination>
+      <address>10.0.10.11</address>
+    </destination>
+    <descr><![CDATA[ Allow LAN VMs to reach Wazuh ]]></descr>
+    <statetype><![CDATA[ keep state ]]></statetype>
+  </rule>
+
+  <rule>
+    <type>pass</type>
+    <interface>opt1</interface>
+    <ipprotocol>inet</ipprotocol>
+    <source>
+      <network>opt1</network>
+    </source>
+    <destination>
+      <network>lan</network>
+    </destination>
+    <descr><![CDATA[ Allow Wazuh to reach Machine B VMs ]]></descr>
+    <statetype><![CDATA[ keep state ]]></statetype>
+  </rule>
+
+  <rule>
+    <type>pass</type>
+    <interface>lan</interface>
+    <ipprotocol>inet</ipprotocol>
+    <source>
+      <network>lan</network>
+    </source>
+    <destination>
+      <any/>
+    </destination>
+    <descr><![CDATA[ Allow LAN VMs Internet Access ]]></descr>
+    <statetype><![CDATA[ keep state ]]></statetype>
+  </rule>
+
+  <rule>
+    <type>pass</type>
+    <interface>opt1</interface>
+    <ipprotocol>inet</ipprotocol>
+    <source>
+      <network>opt1</network>
+    </source>
+    <destination>
+      <any/>
+    </destination>
+    <descr><![CDATA[ Allow Wazuh Internet Access ]]></descr>
+    <statetype><![CDATA[ keep state ]]></statetype>
+  </rule>
+</filter>
