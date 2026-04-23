@@ -4,10 +4,10 @@
     <interface>openvpn</interface>
     <ipprotocol>inet</ipprotocol>
     <source>
-      <address>192.168.57.0/24</address>
+      <address>192.168.X.0/24</address>
     </source>
     <destination>
-      <address>192.168.56.0/24</address>
+      <address>192.168.X.0/24</address>
     </destination>
     <descr><![CDATA[ Allow Machine B LAN to Machine A LAN ]]></descr>
     <statetype><![CDATA[ keep state ]]></statetype>
@@ -21,7 +21,7 @@
       <network>lan</network>
     </source>
     <destination>
-      <address>10.0.10.11</address>
+      <address>10.0.X.X</address>
     </destination>
     <descr><![CDATA[ Allow LAN VMs to reach Wazuh ]]></descr>
     <statetype><![CDATA[ keep state ]]></statetype>
