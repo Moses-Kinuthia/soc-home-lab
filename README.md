@@ -10,7 +10,7 @@ The environment is built across two physical hosts using VirtualBox and a physic
 - **Endpoints:** Windows Server 2019 (DC) & Windows 10 LTSC (client).
 
 ## ⚙️ Core Configurations
-- **Segmentation:** Isolated segments (Attack, Management, Production) using pfSense VLANs/Rules.
+- **Segmentation:** Isolated segments (Attack, Management, Production) using pfSense Rules.
 - **Telemetry:** Advanced logging via Sysmon and Windows Event Forwarding.
 - **Hardening:** Implementation of CIS Benchmarks for Windows Server 2019.
 
