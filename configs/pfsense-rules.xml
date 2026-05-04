@@ -1,71 +1,183 @@
-<filter>
-  <rule>
-    <type>pass</type>
-    <interface>openvpn</interface>
-    <ipprotocol>inet</ipprotocol>
-    <source>
-      <address>192.168.X.0/24</address>
-    </source>
-    <destination>
-      <address>192.168.X.0/24</address>
-    </destination>
-    <descr><![CDATA[ Allow Machine B LAN to Machine A LAN ]]></descr>
-    <statetype><![CDATA[ keep state ]]></statetype>
+<group name="local,windows,authentication,">
+
+  <!-- =========================
+       AUTHENTICATION BASELINE
+       ========================= -->
+
+  <!-- Failed logon -->
+  <rule id="100001" level="5">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4625</field>
+    <description>Windows: Failed logon attempt detected</description>
+    <group>authentication_failed,</group>
   </rule>
 
-  <rule>
-    <type>pass</type>
-    <interface>lan</interface>
-    <ipprotocol>inet</ipprotocol>
-    <source>
-      <network>lan</network>
-    </source>
-    <destination>
-      <address>10.0.X.X</address>
-    </destination>
-    <descr><![CDATA[ Allow LAN VMs to reach Wazuh ]]></descr>
-    <statetype><![CDATA[ keep state ]]></statetype>
+  <!-- Credential stuffing (5 failures / 60s from same IP) -->
+  <rule id="100002" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <description>FRAUD-DETECT: Credential stuffing (5 failures / 60s)</description>
+    <mitre>
+      <id>T1110.003</id>
+    </mitre>
   </rule>
 
-  <rule>
-    <type>pass</type>
-    <interface>opt1</interface>
-    <ipprotocol>inet</ipprotocol>
-    <source>
-      <network>opt1</network>
-    </source>
-    <destination>
-      <network>lan</network>
-    </destination>
-    <descr><![CDATA[ Allow Wazuh to reach Machine B VMs ]]></descr>
-    <statetype><![CDATA[ keep state ]]></statetype>
+  <!-- Password spray (20 failures / 2 min) -->
+  <rule id="100003" level="14" frequency="20" timeframe="120">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <description>FRAUD-DETECT: HIGH - Password spray (20 attempts / 2 min)</description>
+    <mitre>
+      <id>T1110.003</id>
+    </mitre>
   </rule>
 
-  <rule>
-    <type>pass</type>
-    <interface>lan</interface>
-    <ipprotocol>inet</ipprotocol>
-    <source>
-      <network>lan</network>
-    </source>
-    <destination>
-      <any/>
-    </destination>
-    <descr><![CDATA[ Allow LAN VMs Internet Access ]]></descr>
-    <statetype><![CDATA[ keep state ]]></statetype>
+  <!-- Account lockout -->
+  <rule id="100004" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4740</field>
+    <description>Account locked out: $(win.eventdata.targetUserName)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
   </rule>
 
-  <rule>
-    <type>pass</type>
-    <interface>opt1</interface>
-    <ipprotocol>inet</ipprotocol>
-    <source>
-      <network>opt1</network>
-    </source>
-    <destination>
-      <any/>
-    </destination>
-    <descr><![CDATA[ Allow Wazuh Internet Access ]]></descr>
-    <statetype><![CDATA[ keep state ]]></statetype>
+  <!-- Success after failures (ATO) -->
+  <rule id="100005" level="15">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4624</field>
+    <same_field>win.eventdata.targetUserName</same_field>
+    <if_matched_sid>100001</if_matched_sid>
+    <description>CRITICAL: Success after failures (possible ATO) - $(win.eventdata.targetUserName)</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
   </rule>
-</filter>
+
+  <!-- =========================
+       INSIDER / PRIV ESC
+       ========================= -->
+
+  <!-- New account created -->
+  <rule id="100110" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4720</field>
+    <description>New account created by $(win.eventdata.subjectUserName)</description>
+    <mitre>
+      <id>T1136.001</id>
+    </mitre>
+  </rule>
+
+  <!-- Added to privileged group -->
+  <rule id="100111" level="13">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID" type="pcre2">4728|4732</field>
+    <field name="win.eventdata.targetUserName" type="pcre2">(?i)admin</field>
+    <description>User added to privileged group: $(win.eventdata.targetUserName)</description>
+    <mitre>
+      <id>T1078.002</id>
+    </mitre>
+  </rule>
+
+  <!-- Audit log cleared -->
+  <rule id="100012" level="15">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">1102</field>
+    <description>CRITICAL: Audit log cleared by $(win.eventdata.subjectUserName)</description>
+    <mitre>
+      <id>T1070.001</id>
+    </mitre>
+  </rule>
+
+  <!-- NTDS dump attempt (Sysmon required) -->
+  <rule id="100013" level="15">
+    <if_group>sysmon</if_group>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)ntdsutil.*ifm|ntds\.dit</field>
+    <description>CRITICAL: Possible NTDS dump attempt</description>
+    <mitre>
+      <id>T1003.003</id>
+    </mitre>
+  </rule>
+
+  <!-- =========================
+       LATERAL MOVEMENT
+       ========================= -->
+
+  <!-- Network logon from attack subnet -->
+  <rule id="100020" level="10">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4624</field>
+    <field name="win.eventdata.logonType">3</field>
+    <field name="win.eventdata.ipAddress" type="pcre2">10\.0\.10\.</field>
+    <description>Network logon from attack subnet (10.0.10.x)</description>
+    <mitre>
+      <id>T1021.002</id>
+    </mitre>
+  </rule>
+
+  <rule id="100021" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4769</field>
+    <field name="win.eventdata.ticketEncryptionType" type="pcre2">0x17|0x12|0x11</field>
+    <description>Possible Kerberoasting activity</description>
+    <mitre>
+      <id>T1558.003</id>
+    </mitre>
+  </rule>
+
+  <!-- Remote command via services.exe -->
+  <rule id="100022" level="13">
+    <if_group>sysmon</if_group>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)services\.exe</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)cmd\.exe|powershell\.exe</field>
+    <description>Remote command execution via services.exe</description>
+    <mitre>
+      <id>T1021.002</id>
+    </mitre>
+  </rule>
+
+  <!-- =========================
+       KALI / LAB ATTACK DETECTION
+       ========================= -->
+
+  <!-- Network scan detection (raw log match) -->
+  <rule id="100027" level="10">
+    <if_sid>18105</if_sid>
+    <regex>Source Address:\s*10\.0\.20\.11</regex>
+    <description>ATTACK: Network scan from Kali (10.0.20.11)</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+  <!-- Failed logon from Kali -->
+  <rule id="100028" level="8">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4625</field>
+    <regex>10\.0\.20\.11</regex>
+    <description>Failed logon from Kali (10.0.20.11)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Credential stuffing from Kali -->
+  <rule id="100033" level="14" frequency="5" timeframe="60">
+    <if_matched_sid>100028</if_matched_sid>
+    <description>CRITICAL: Credential stuffing from Kali</description>
+    <mitre>
+      <id>T1110.003</id>
+    </mitre>
+  </rule>
+
+  <!-- =========================
+       POWERSHELL VISIBILITY
+       ========================= -->
+
+  <rule id="100034" level="6">
+    <if_group>powershell</if_group>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">.+</field>
+    <description>PowerShell execution detected</description>
+  </rule>
+
+</group>
