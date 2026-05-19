@@ -1,0 +1,239 @@
+<!--
+  Custom Detection Rules — Financial Fraud / Cyber Threat Detection Pipeline
+  Author : Moses Kinuthia
+  SIEM   : Wazuh 4.x   |   Environment: SOC home lab (SOCLAB.local)
+
+  This file is the SINGLE SOURCE OF TRUTH for custom rule IDs.
+  The README detection tables and scripts/enrich_alerts.py are reconciled
+  against the IDs below.
+
+  ID groups:
+    100001-100006   Authentication / brute force
+    100012-100013   Insider threat: anti-forensics, credential dumping
+    100020-100022   Lateral movement
+    100027-100034   Lab attack-source detection & host telemetry
+    100110-100111   Insider threat: account creation / privilege abuse
+
+-->
+<group name="local,">
+
+  <!-- =========================================================
+       AUTHENTICATION / BRUTE FORCE
+       ========================================================= -->
+
+  <!-- Base rule: a single Windows failed logon -->
+  <rule id="100001" level="5">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4625</field>
+    <description>Windows: failed logon attempt</description>
+    <group>authentication_failed,</group>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Burst brute force: 5 failures within 60s from the same source IP -->
+  <rule id="100002" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <description>FRAUD-DETECT: Brute force - 5 failed logons in 60s from one source</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- High-volume brute force: 20 failures within 120s from the same source IP -->
+  <rule id="100003" level="14" frequency="20" timeframe="120">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <description>FRAUD-DETECT: HIGH - 20 failed logons in 120s from one source</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Account lockout -->
+  <rule id="100004" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4740</field>
+    <description>Account locked out: $(win.eventdata.targetUserName)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Possible ATO: a successful logon for a user who had >=3 recent failures.
+       Composite rule: 4624 (this event) correlated with prior 100001 matches
+       for the SAME target user within a 10-minute window. -->
+  <rule id="100005" level="15" frequency="3" timeframe="600">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_field>win.eventdata.targetUserName</same_field>
+    <field name="win.system.eventID">4624</field>
+    <description>CRITICAL: Successful logon after repeated failures - possible ATO ($(win.eventdata.targetUserName))</description>
+    <mitre>
+      <id>T1078</id>
+    </mitre>
+  </rule>
+
+  <!-- Slow brute force: 15 failures within 1 hour from the same source IP.
+       Catches "low-and-slow" attempts that stay under the 100002/100003
+       burst thresholds. -->
+  <rule id="100006" level="12" frequency="15" timeframe="3600">
+    <if_matched_sid>100001</if_matched_sid>
+    <same_field>win.eventdata.ipAddress</same_field>
+    <description>FRAUD-DETECT: Slow brute force - 15 failed logons in 1 hour from one source</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+  </rule>
+
+  <!-- =========================================================
+       INSIDER THREAT: ANTI-FORENSICS / CREDENTIAL DUMPING
+       ========================================================= -->
+
+  <!-- Windows Security event log cleared. Treated as CRITICAL with no
+       thresholding: no legitimate admin clears the Security log without
+       a change ticket. -->
+  <rule id="100012" level="15">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">1102</field>
+    <description>INSIDER-THREAT: CRITICAL - Security audit log cleared by $(win.eventdata.subjectUserName)</description>
+    <mitre>
+      <id>T1070.001</id>
+    </mitre>
+  </rule>
+
+  <!-- NTDS.dit dump attempt via ntdsutil / direct file reference.
+       Requires Sysmon process-creation telemetry (Event ID 1). -->
+  <rule id="100013" level="15">
+    <if_group>sysmon</if_group>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)ntdsutil.*ifm|ntds\.dit</field>
+    <description>INSIDER-THREAT: CRITICAL - Possible NTDS.dit credential dump attempt</description>
+    <mitre>
+      <id>T1003.003</id>
+    </mitre>
+  </rule>
+
+  <!-- =========================================================
+       LATERAL MOVEMENT
+       ========================================================= -->
+
+  <!-- Network (Type 3) logon sourced FROM the attack segment (OPT2,
+       10.0.20.0/24). Any interactive workload reaching production hosts
+       from the attacker subnet is treated as lateral movement. -->
+  <rule id="100020" level="10">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4624</field>
+    <field name="win.eventdata.logonType">3</field>
+    <field name="win.eventdata.ipAddress" type="pcre2">^10\.0\.20\.</field>
+    <description>LATERAL-MOVEMENT: Network logon (Type 3) from attack segment (10.0.20.0/24)</description>
+    <mitre>
+      <id>T1021.002</id>
+    </mitre>
+  </rule>
+
+  <!-- Possible Kerberoasting: TGS request (4769) using weak RC4/DES
+       encryption. Machine accounts (serviceName ending in $) are excluded
+       to cut false positives. -->
+  <rule id="100021" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4769</field>
+    <field name="win.eventdata.ticketEncryptionType" type="pcre2">0x17|0x12|0x11</field>
+    <field name="win.eventdata.serviceName" negate="yes" type="pcre2">\$$</field>
+    <description>LATERAL-MOVEMENT: Possible Kerberoasting - weak-encryption TGS request for $(win.eventdata.serviceName)</description>
+    <mitre>
+      <id>T1558.003</id>
+    </mitre>
+  </rule>
+
+  <!-- Remote command execution: cmd/powershell spawned by services.exe,
+       a common signature of SMB-based remote execution (PsExec-style).
+       Requires Sysmon process-creation telemetry (Event ID 1). -->
+  <rule id="100022" level="13">
+    <if_group>sysmon</if_group>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)\\services\.exe$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)\\(cmd|powershell)\.exe$</field>
+    <description>LATERAL-MOVEMENT: Remote command execution via services.exe ($(win.eventdata.image))</description>
+    <mitre>
+      <id>T1021.002</id>
+    </mitre>
+  </rule>
+
+  <!-- =========================================================
+       LAB ATTACK-SOURCE DETECTION (Kali - 10.0.20.11)
+       ========================================================= -->
+
+  <!-- Network scan detected from the lab attack host -->
+  <rule id="100027" level="10">
+    <if_sid>18105</if_sid>
+    <regex>Source Address:\s*10\.0\.20\.11</regex>
+    <description>ATTACK: Network scan from lab attack host (10.0.20.11)</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+  </rule>
+
+  <!-- Failed logon originating from the lab attack host -->
+  <rule id="100028" level="8">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4625</field>
+    <regex>10\.0\.20\.11</regex>
+    <description>ATTACK: Failed logon from lab attack host (10.0.20.11)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- Brute-force burst from the lab attack host: 5 failures in 60s -->
+  <rule id="100033" level="14" frequency="5" timeframe="60">
+    <if_matched_sid>100028</if_matched_sid>
+    <description>FRAUD-DETECT: Brute force burst from lab attack host (5 failures / 60s)</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+  </rule>
+
+  <!-- =========================================================
+       HOST TELEMETRY: POWERSHELL VISIBILITY
+       ========================================================= -->
+
+  <!-- Visibility rule (low severity by design): records all PowerShell
+       script-block execution so it is searchable for hunts and timelines.
+       Not an alert - kept at level 3 so it does not add SOC noise. -->
+  <rule id="100034" level="3">
+    <if_group>powershell</if_group>
+    <field name="win.eventdata.scriptBlockText" type="pcre2">.+</field>
+    <description>VISIBILITY: PowerShell script-block executed</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+  </rule>
+
+  <!-- =========================================================
+       INSIDER THREAT: ACCOUNT CREATION / PRIVILEGE ABUSE
+       ========================================================= -->
+
+  <!-- New user account created -->
+  <rule id="100110" level="12">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID">4720</field>
+    <description>INSIDER-THREAT: New account created by $(win.eventdata.subjectUserName)</description>
+    <mitre>
+      <id>T1136.001</id>
+    </mitre>
+  </rule>
+
+  <!-- Member added to a privileged group (4728 global / 4732 local).
+       Fires when the target group name contains "admin"
+       (Domain Admins, Administrators, etc.). -->
+  <rule id="100111" level="13">
+    <if_group>windows</if_group>
+    <field name="win.system.eventID" type="pcre2">^(4728|4732)$</field>
+    <field name="win.eventdata.targetUserName" type="pcre2">(?i)admin</field>
+    <description>INSIDER-THREAT: Member added to privileged group "$(win.eventdata.targetUserName)"</description>
+    <mitre>
+      <id>T1078.002</id>
+    </mitre>
+  </rule>
+
+</group>
