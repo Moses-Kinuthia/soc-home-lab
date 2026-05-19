@@ -230,7 +230,7 @@ Sysmon consistently via GPO, and the service state is stable across reboots.
 | File | Description |
 |---|---|
 | [`configs/ossec.conf`](configs/ossec.conf) | Wazuh manager configuration (redacted) |
-| [`configs/wazuh-custom-rules.xml`](configs/wazuh-custom-rules.xml) | Custom detection rules (same file as Financial-Fraud repo) |
+| [`configs/wazuh-custom-rules.xml`](configs/local_rules.xml) | Custom detection rules (same file as Financial-Fraud repo) |
 
 ---
 
